@@ -47,33 +47,36 @@ if st.button("预测"):
     pred_label = (pred_prob >= threshold).astype(int)
 
     st.write(f"预测概率: {pred_prob[0]:.4f}")
-    st.write(f"预测结果: {'yes' if pred_label[0]==1 else 'no'}")
+    st.write(f"预测结果: {'yes' if pred_label[0] == 1 else 'no'}")
 
-    # =========================
-    # 4. SHAP解释
-    # =========================
-    # 背景数据（可用均值或采样）
-    background_data = pd.DataFrame([X_input.iloc[0].values], columns=feature_cols)
+    # 创建一个合理的背景数据集（用特征的均值/中位数）
+    background_data = pd.DataFrame([{
+        'Age': 0,
+        'Education': 1,
+        'MOCA_Score': 0,
+        'Operation_Time': 0,
+        'GFR': 0,
+        'Weakened_1': 0,
+        'Depression_1': 0,
+        'Nutritional_Risk_1': 0
+    }])
 
     explainer = shap.KernelExplainer(
-        model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:,1],
+        model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
         data=background_data,
         link="identity"
     )
 
     shap_values = explainer.shap_values(X_input, nsamples=100)
 
-    # 确保 shap_values 是一维
-    if isinstance(shap_values, list) or (hasattr(shap_values, 'shape') and len(shap_values.shape) > 1):
-        shap_values = np.array(shap_values)[0]
+    # 确保是一维数组
+    if len(shap_values.shape) > 1:
+        shap_values = shap_values[0]
 
+    # 打印 SHAP 值查看
     st.write("各特征的 SHAP 值：")
     for name, val in zip(feature_cols, shap_values):
-        if isinstance(val, (list, np.ndarray)):
-            val_to_show = float(val[0])
-        else:
-            val_to_show = float(val)
-        st.write(f"{name}: {val_to_show:.4f}")
+        st.write(f"{name}: {val:.4f}")
 
     # 生成力图
     force_plot = shap.force_plot(
@@ -89,3 +92,4 @@ if st.button("预测"):
     st.subheader("模型预测的 SHAP 力图")
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=400)
+
