@@ -7,9 +7,10 @@ import os
 # =========================
 # 1. 加载模型、标准化器和特征列
 # =========================
-model_path = r"D:/JQXX/svm_final_model.pkl"
-scaler_path = r"D:/JQXX/svm_scaler.pkl"
-feature_cols_path = r"D:/JQXX/svm_feature_columns.pkl"
+# 使用相对路径，这样上传到 GitHub 后 Streamlit Cloud 能找到文件
+model_path = "svm_final_model.pkl"
+scaler_path = "svm_scaler.pkl"
+feature_cols_path = "svm_feature_columns.pkl"
 
 model = joblib.load(model_path)
 scaler = joblib.load(scaler_path)
@@ -22,8 +23,6 @@ st.title("SVM 预测 dNCR")
 st.write("请输入患者特征：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
-
-# 自动识别分类特征（除了连续变量）
 categorical_cols = [col for col in feature_cols if col not in continuous_cols]
 
 # 生成输入框
@@ -32,12 +31,15 @@ for col in feature_cols:
     if col in continuous_cols:
         input_data[col] = st.number_input(f"{col}:", value=0)
     else:
-        # 尝试获取类别列表，如果模型没有提供，默认 0/1
-        # 这里假设分类特征是整数编码
-        max_val = 4 if 'Education' in col else 1
-        input_data[col] = st.selectbox(f"{col}:", options=list(range(0, max_val + 1)))
+        # Education 完整 0-4，其他分类特征默认 0/1
+        if col == "Education":
+            input_data[col] = st.selectbox(f"{col}:", options=list(range(0, 5)))
+        else:
+            input_data[col] = st.selectbox(f"{col}:", options=[0, 1])
 
 X_input = pd.DataFrame([input_data])
+
+# 标准化连续变量
 X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
 
 # =========================
@@ -51,16 +53,12 @@ if st.button("预测"):
     st.write(f"预测概率: {pred_prob[0]:.4f}")
     st.write(f"预测结果: {'yes' if pred_label[0] == 1 else 'no'}")
 
-    # 创建一个合理的背景数据集（用特征的均值/中位数）
+    # =========================
+    # 4. SHAP 值和力图
+    # =========================
+    # 生成背景数据集（可用均值或中位数）
     background_data = pd.DataFrame([{
-        'Age': 0,
-        'Education': 1,
-        'MOCA_Score': 0,
-        'Operation_Time': 0,
-        'GFR': 0,
-        'Weakened_1': 0,
-        'Depression_1': 0,
-        'Nutritional_Risk_1': 0
+        col: 0 if col in continuous_cols else 1 for col in feature_cols
     }])
 
     explainer = shap.KernelExplainer(
@@ -71,16 +69,15 @@ if st.button("预测"):
 
     shap_values = explainer.shap_values(X_input, nsamples=100)
 
-    # 确保是一维数组
-    if len(shap_values.shape) > 1:
+    # 如果返回多维，取第一个样本
+    if isinstance(shap_values, list):
         shap_values = shap_values[0]
 
-    # 打印 SHAP 值查看
     st.write("各特征的 SHAP 值：")
     for name, val in zip(feature_cols, shap_values):
         st.write(f"{name}: {val:.4f}")
 
-    # 生成力图
+    # 生成力图并保存 HTML
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=shap_values,
