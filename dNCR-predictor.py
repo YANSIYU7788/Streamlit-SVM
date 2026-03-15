@@ -3,11 +3,11 @@ import pandas as pd
 import joblib
 import shap
 import os
+import numpy as np
 
 # =========================
-# 1. 加载模型、标准化器和特征列
+# 1. 加载模型、标准化器和特征列（相对路径）
 # =========================
-# 使用相对路径，这样上传到 GitHub 后 Streamlit Cloud 能找到文件
 model_path = "svm_final_model.pkl"
 scaler_path = "svm_scaler.pkl"
 feature_cols_path = "svm_feature_columns.pkl"
@@ -23,23 +23,19 @@ st.title("SVM 预测 dNCR")
 st.write("请输入患者特征：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
+
+# 自动识别分类特征
 categorical_cols = [col for col in feature_cols if col not in continuous_cols]
 
-# 生成输入框
 input_data = {}
 for col in feature_cols:
     if col in continuous_cols:
         input_data[col] = st.number_input(f"{col}:", value=0)
     else:
-        # Education 完整 0-4，其他分类特征默认 0/1
-        if col == "Education":
-            input_data[col] = st.selectbox(f"{col}:", options=list(range(0, 5)))
-        else:
-            input_data[col] = st.selectbox(f"{col}:", options=[0, 1])
+        max_val = 4 if 'Education' in col else 1
+        input_data[col] = st.selectbox(f"{col}:", options=list(range(0, max_val + 1)))
 
 X_input = pd.DataFrame([input_data])
-
-# 标准化连续变量
 X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
 
 # =========================
@@ -51,33 +47,35 @@ if st.button("预测"):
     pred_label = (pred_prob >= threshold).astype(int)
 
     st.write(f"预测概率: {pred_prob[0]:.4f}")
-    st.write(f"预测结果: {'yes' if pred_label[0] == 1 else 'no'}")
+    st.write(f"预测结果: {'yes' if pred_label[0]==1 else 'no'}")
 
     # =========================
-    # 4. SHAP 值和力图
+    # 4. SHAP解释
     # =========================
-    # 生成背景数据集（可用均值或中位数）
-    background_data = pd.DataFrame([{
-        col: 0 if col in continuous_cols else 1 for col in feature_cols
-    }])
+    # 背景数据（可用均值或采样）
+    background_data = pd.DataFrame([X_input.iloc[0].values], columns=feature_cols)
 
     explainer = shap.KernelExplainer(
-        model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
+        model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:,1],
         data=background_data,
         link="identity"
     )
 
     shap_values = explainer.shap_values(X_input, nsamples=100)
 
-    # 如果返回多维，取第一个样本
-    if isinstance(shap_values, list):
-        shap_values = shap_values[0]
+    # 确保 shap_values 是一维
+    if isinstance(shap_values, list) or (hasattr(shap_values, 'shape') and len(shap_values.shape) > 1):
+        shap_values = np.array(shap_values)[0]
 
     st.write("各特征的 SHAP 值：")
     for name, val in zip(feature_cols, shap_values):
-        st.write(f"{name}: {val:.4f}")
+        if isinstance(val, (list, np.ndarray)):
+            val_to_show = float(val[0])
+        else:
+            val_to_show = float(val)
+        st.write(f"{name}: {val_to_show:.4f}")
 
-    # 生成力图并保存 HTML
+    # 生成力图
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=shap_values,
