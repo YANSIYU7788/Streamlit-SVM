@@ -5,7 +5,6 @@ import shap
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
 # =========================
 # 1. 加载模型、标准化器和特征列（相对路径）
@@ -114,70 +113,59 @@ if st.button("predict"):
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
     # =========================
-    # 自定义 Force Plot 可视化（显示所有特征）
+    # Waterfall 风格的可视化（显示所有特征）
     # =========================
-    st.subheader("SHAP force plot of the prediction")
+    st.subheader("SHAP values visualization")
     
     base_value = explainer.expected_value
     shap_vals = [aggregated_shap[f] for f in original_features]
     feature_vals = [aggregated_values[f] for f in original_features]
     
-    # 按 SHAP 值排序
-    sorted_indices = np.argsort(shap_vals)
+    # 按绝对值排序
+    sorted_indices = np.argsort(np.abs(shap_vals))[::-1]
     sorted_features = [original_features[i] for i in sorted_indices]
     sorted_shap = [shap_vals[i] for i in sorted_indices]
     sorted_values = [feature_vals[i] for i in sorted_indices]
     
-    # 创建图形
-    fig, ax = plt.subplots(figsize=(14, 4))
+    # 创建 waterfall 图
+    fig, ax = plt.subplots(figsize=(10, 8))
     
-    # 计算累积位置
-    cumsum = np.cumsum([0] + sorted_shap)
+    # 计算累积值
+    cumsum = [base_value]
+    for val in sorted_shap:
+        cumsum.append(cumsum[-1] + val)
     
-    # 绘制每个特征的贡献
+    # 绘制条形
+    y_pos = np.arange(len(sorted_features) + 2)
+    
+    # 基准值
+    ax.barh(0, base_value, color='gray', alpha=0.3, height=0.6)
+    ax.text(base_value/2, 0, f'Base value = {base_value:.4f}', 
+            va='center', ha='center', fontsize=10, weight='bold')
+    
+    # 每个特征的贡献
     for i, (feat, shap_val, feat_val) in enumerate(zip(sorted_features, sorted_shap, sorted_values)):
         color = '#ff0051' if shap_val > 0 else '#008bfb'
+        start = cumsum[i]
         
-        # 绘制矩形
-        rect = mpatches.FancyBboxPatch(
-            (cumsum[i] + base_value, 0.3),
-            shap_val,
-            0.4,
-            boxstyle="round,pad=0.01",
-            linewidth=1,
-            edgecolor='white',
-            facecolor=color,
-            alpha=0.8
-        )
-        ax.add_patch(rect)
+        ax.barh(i + 1, shap_val, left=start, color=color, alpha=0.8, height=0.6)
         
-        # 添加特征标签
-        text_x = cumsum[i] + base_value + shap_val / 2
-        ax.text(text_x, 0.5, f'{feat}={feat_val}', 
-                ha='center', va='center', fontsize=8, 
-                color='white', weight='bold', rotation=0)
+        # 特征标签
+        label = f'{feat} = {feat_val}\nSHAP = {shap_val:.4f}'
+        ax.text(-0.02, i + 1, label, va='center', ha='right', fontsize=9)
+    
+    # 最终预测值
+    final_value = cumsum[-1]
+    ax.barh(len(sorted_features) + 1, final_value, color='gray', alpha=0.3, height=0.6)
+    ax.text(final_value/2, len(sorted_features) + 1, f'f(x) = {final_value:.4f}', 
+            va='center', ha='center', fontsize=10, weight='bold')
     
     # 设置坐标轴
-    final_value = base_value + sum(sorted_shap)
-    ax.set_xlim(min(base_value, final_value) - 0.05, max(base_value, final_value) + 0.05)
-    ax.set_ylim(0, 1)
-    
-    # 添加基准值和输出值标签
-    ax.text(base_value, 0.1, f'base value\n{base_value:.3f}', 
-            ha='center', va='top', fontsize=10, weight='bold')
-    ax.text(final_value, 0.1, f'f(x)\n{final_value:.3f}', 
-            ha='center', va='top', fontsize=10, weight='bold')
-    
-    # 添加箭头
-    ax.annotate('', xy=(final_value, 0.5), xytext=(base_value, 0.5),
-                arrowprops=dict(arrowstyle='->', lw=2, color='black'))
-    
-    # 隐藏坐标轴
-    ax.set_yticks([])
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.set_xlabel('Model output value', fontsize=11)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(['Base'] + [''] * len(sorted_features) + ['Output'])
+    ax.set_xlabel('Model output value', fontsize=12)
+    ax.set_title('SHAP Waterfall Plot', fontsize=14, weight='bold')
+    ax.grid(axis='x', alpha=0.3)
     
     plt.tight_layout()
     st.pyplot(fig)
