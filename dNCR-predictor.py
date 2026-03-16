@@ -113,29 +113,34 @@ if st.button("predict"):
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
     # =========================
-    # 方案1: Waterfall Plot (显示所有特征)
+    # 自定义条形图显示所有特征
     # =========================
-    st.subheader("SHAP Waterfall Plot (all features)")
+    st.subheader("SHAP values visualization (all features)")
     
-    # 创建 Explanation 对象
-    shap_explanation = shap.Explanation(
-        values=np.array([aggregated_shap[f] for f in original_features]),
-        base_values=explainer.expected_value,
-        data=np.array([aggregated_values[f] for f in original_features]),
-        feature_names=original_features
-    )
+    shap_vals = [aggregated_shap[f] for f in original_features]
+    feature_vals = [aggregated_values[f] for f in original_features]
     
     fig, ax = plt.subplots(figsize=(10, 6))
-    shap.waterfall_plot(shap_explanation, max_display=len(original_features), show=False)
-    st.pyplot(fig)
-    plt.close()
-
-    # =========================
-    # 方案2: Bar Plot (显示所有特征)
-    # =========================
-    st.subheader("SHAP Bar Plot (all features)")
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    shap.bar_plot(shap_explanation, max_display=len(original_features), show=False)
+    # 创建颜色：正值红色，负值蓝色
+    colors = ['#ff0051' if val > 0 else '#008bfb' for val in shap_vals]
+    
+    # 绘制水平条形图
+    y_pos = np.arange(len(original_features))
+    ax.barh(y_pos, shap_vals, color=colors, alpha=0.8)
+    
+    # 设置标签
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([f"{name} = {feature_vals[i]}" for i, name in enumerate(original_features)])
+    ax.set_xlabel('SHAP value (impact on model output)', fontsize=12)
+    ax.set_title('Feature Contributions to Prediction', fontsize=14, fontweight='bold')
+    
+    # 添加基准线
+    ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+    
+    # 添加网格
+    ax.grid(axis='x', alpha=0.3)
+    
+    plt.tight_layout()
     st.pyplot(fig)
     plt.close()
