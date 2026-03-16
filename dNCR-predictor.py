@@ -19,7 +19,7 @@ feature_cols = joblib.load(feature_cols_path)
 # =========================
 # 2. Streamlit 界面
 # =========================
-st.title("SVM predictdNCR")
+st.title("SVM predict dNCR")
 st.write("Please enter patient characteristics：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
@@ -106,7 +106,7 @@ if st.button("predict"):
             aggregated_shap[orig_feat] = related_shap
             aggregated_values[orig_feat] = input_data_original[orig_feat]
 
-    #显示原始特征的 SHAP 值
+    # 显示原始特征的 SHAP 值
     st.write("SHAP values of each feature (original features)：")
     for name in original_features:
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
@@ -119,27 +119,20 @@ if st.button("predict"):
     shap_vals_array = np.array([aggregated_shap[f] for f in original_features])
     feature_vals_array = np.array([aggregated_values[f] for f in original_features])
     
-    # 使用 JavaScript 版本，设置 link="identity" 并调整参数
+    # 生成 force plot
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=shap_vals_array,
         features=feature_vals_array,
         feature_names=original_features,
-        matplotlib=False,
-        link="identity",
-        out_names="Prediction"
+        matplotlib=False
     )
     
     shap.save_html("shap_force_plot.html", force_plot)
     
-    # 读取并修改 HTML 以确保显示所有特征
+    # 读取 HTML
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
     
-    # 注入自定义样式确保显示所有特征
-    custom_html = html_content.replace(
-        '</head>',
-        '<style>.force-plot-container { min-width: 100% !important; }</style></head>'
-    )
-    
-    st.components.v1.html(custom_html, height=150, scrolling=True)
+    # 显示，增加高度和宽度
+    st.components.v1.html(html_content, height=300, scrolling=False)
