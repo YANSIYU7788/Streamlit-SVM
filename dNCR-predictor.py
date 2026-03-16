@@ -30,7 +30,7 @@ original_categorical = ['Education', 'Weakened', 'Depression', 'Nutritional_Risk
 # 用户输入原始值
 input_data_original = {}
 for col in continuous_cols:
-    input_data_original[col] = st.number_input(f"{col}:", value=0)
+    input_data_original[col] = st.number_input(f"{col}:", value=0.0)
 
 for col in original_categorical:
     if col == 'Education':
@@ -38,26 +38,37 @@ for col in original_categorical:
     else:
         input_data_original[col] = st.selectbox(f"{col}:", options=[0, 1])
 
-# 构建模型输入（独热编码）
-input_data = {}
-for col in feature_cols:
-    if col in continuous_cols:
-        input_data[col] = input_data_original[col]
-    else:
-        # 处理独热编码列
-        for orig_col in original_categorical:
-            if col.startswith(orig_col + '_'):
-                category = int(col.split('_')[-1])
-                input_data[col] = 1 if input_data_original[orig_col] == category else 0
-                break
-
-X_input = pd.DataFrame([input_data])
-X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
-
 # =========================
 # 3. 预测按钮
 # =========================
 if st.button("predict"):
+    # 初始化所有特征为0
+    input_data = {col: 0 for col in feature_cols}
+    
+    # 设置连续特征
+    for col in continuous_cols:
+        if col in feature_cols:
+            input_data[col] = input_data_original[col]
+    
+    # 设置分类特征（独热编码）
+    for orig_col in original_categorical:
+        user_value = input_data_original[orig_col]
+        # 找到所有相关的独热编码列
+        related_cols = [col for col in feature_cols if col.startswith(orig_col + '_')]
+        for col in related_cols:
+            # 提取类别值
+            try:
+                category = int(col.split('_')[-1])
+                input_data[col] = 1 if user_value == category else 0
+            except:
+                pass
+    
+    # 创建DataFrame，确保列顺序与feature_cols一致
+    X_input = pd.DataFrame([input_data], columns=feature_cols)
+    
+    # 标准化连续特征
+    X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
+    
     pred_prob = model.predict_proba(X_input)[:, 1]
     threshold = 0.16
     pred_label = (pred_prob >= threshold).astype(int)
@@ -66,7 +77,7 @@ if st.button("predict"):
     st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
     # 创建背景数据
-    background_data = pd.DataFrame([{col: 0 for col in feature_cols}])
+    background_data = pd.DataFrame([{col: 0 for col in feature_cols}], columns=feature_cols)
 
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
