@@ -177,15 +177,14 @@ if st.button("Predict"):
             feature_names_list.append(feat)
 
        # =========================
-    # SHAP force plot (修正版)
+   # SHAP force plot
     # =========================
     st.subheader("SHAP Force Plot")
-
-    # 确保 SHAP 值和特征名称的顺序一致
+    
     shap_vals_list = []
     feature_vals_list = []
     feature_names_list = []
-
+    
     for feat in display_features:
         if feat in feature_cols:
             idx = feature_cols.index(feat)
@@ -197,21 +196,18 @@ if st.button("Predict"):
             shap_vals_list.append(shap_values[idx])
             feature_vals_list.append(input_data_original[feat])
             feature_names_list.append(feat)
-
-    # 1. 生成 SHAP force plot 的 HTML 内容
-    # 注意：这里不再包含 plot_canvas 参数
+    
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=np.array(shap_vals_list),
         features=np.array(feature_vals_list),
         feature_names=feature_names_list,
-        matplotlib=False,
-        out_names="Predicted Probability" # 可选：给底部输出起个名字
+        matplotlib=False
     )
-
-    # 2. 将 plot 转换为 HTML 字符串
-    shap_html = f"<head>{shap.getjs()}</head><body>{force_plot.html()}</body>"
-
-    # 3. 关键步骤：使用 st.components.v1.html 直接渲染，并设置较大的宽度
-    # width=2000 可以根据你的需求调整，或者使用 "100%" 自适应
-    st.components.v1.html(shap_html, height=500, width=2000, scrolling=False)
+    
+    shap.save_html("shap_force_plot.html", force_plot)
+    
+    with open("shap_force_plot.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
+    
+    st.components.v1.html(html_content, height=500, width=2000,  scrolling=False)
