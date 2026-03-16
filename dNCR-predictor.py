@@ -167,4 +167,4 @@ if st.button("Predict"):
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
     
-    st.components.v1.html(html_content, height=300, width=1000,  scrolling=False)
+    st.components.v1.html(html_content, height=300, width=2000,  scrolling=False)
