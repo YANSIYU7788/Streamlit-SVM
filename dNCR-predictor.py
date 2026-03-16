@@ -75,13 +75,9 @@ if st.button("predict"):
     st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
     # =========================
-    # 创建背景数据 - 参考类别都是 0
+    # 创建背景数据 - 首先初始化所有列为 0
     # =========================
-    background_data = {}
-    
-    # 连续特征设为 0
-    for col in continuous_cols:
-        background_data[col] = 0
+    background_data = {col: 0 for col in feature_cols}
     
     # 为每个分类特征设置参考类别为 0
     for col in feature_cols:
@@ -94,6 +90,7 @@ if st.button("predict"):
         elif col.startswith('Nutritional_Risk_'):
             background_data[col] = 1 if col == 'Nutritional_Risk_0' else 0
     
+    # 确保列顺序正确
     background_data = pd.DataFrame([background_data], columns=feature_cols)
 
     explainer = shap.KernelExplainer(
