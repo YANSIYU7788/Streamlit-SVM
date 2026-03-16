@@ -22,46 +22,45 @@ feature_cols = joblib.load(feature_cols_path)
 st.title("SVM predict dNCR")
 st.write("Please enter patient characteristics：")
 
-continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
+# 将 Education 作为连续变量（等级变量）
+continuous_cols = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR']
 
-# 定义原始分类特征
-original_categorical = ['Education', 'Weakened', 'Depression', 'Nutritional_Risk']
+# 定义分类特征（二分类）
+original_categorical = ['Weakened', 'Depression', 'Nutritional_Risk']
 
-# 用户输入原始值
+# 用户输入
 input_data_original = {}
-for col in continuous_cols:
-    input_data_original[col] = st.number_input(f"{col}:", value=0.0)
 
-for col in original_categorical:
+# 连续特征输入
+for col in continuous_cols:
     if col == 'Education':
-        input_data_original[col] = st.selectbox(f"{col}:", options=list(range(0, 5)))
+        input_data_original[col] = st.selectbox(f"{col} (0=文盲, 1=小学, 2=初中, 3=高中, 4=大专及以上):", 
+                                                 options=list(range(0, 5)))
     else:
-        input_data_original[col] = st.selectbox(f"{col}:", options=[0, 1])
+        input_data_original[col] = st.number_input(f"{col}:", value=0.0)
+
+# 分类特征输入
+for col in original_categorical:
+    input_data_original[col] = st.selectbox(f"{col}:", options=[0, 1])
 
 # =========================
 # 3. 预测按钮
 # =========================
 if st.button("predict"):
-    # 初始化所有特征为0
-    input_data = {col: 0 for col in feature_cols}
+    # 构建输入数据
+    input_data = {}
     
     # 设置连续特征
     for col in continuous_cols:
         if col in feature_cols:
             input_data[col] = input_data_original[col]
     
-    # 设置分类特征（独热编码）
-    for orig_col in original_categorical:
-        user_value = input_data_original[orig_col]
-        related_cols = [col for col in feature_cols if col.startswith(orig_col + '_')]
-        for col in related_cols:
-            try:
-                category = int(col.split('_')[-1])
-                input_data[col] = 1 if user_value == category else 0
-            except:
-                pass
+    # 设置分类特征
+    for col in original_categorical:
+        if col in feature_cols:
+            input_data[col] = input_data_original[col]
     
-    # 创建DataFrame，确保列顺序与feature_cols一致
+    # 创建DataFrame
     X_input = pd.DataFrame([input_data], columns=feature_cols)
     
     # 标准化连续特征
@@ -75,25 +74,22 @@ if st.button("predict"):
     st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
     # =========================
-    # 创建背景数据 - 首先初始化所有列为 0
+    # 创建背景数据 - 所有特征设为参考值
     # =========================
-    background_data = {col: 0 for col in feature_cols}
+    background_data = {}
     
-    # 为每个分类特征设置参考类别为 0
-    for col in feature_cols:
-        if col.startswith('Education_'):
-            background_data[col] = 1 if col == 'Education_0' else 0
-        elif col.startswith('Weakened_'):
-            background_data[col] = 1 if col == 'Weakened_0' else 0
-        elif col.startswith('Depression_'):
-            background_data[col] = 1 if col == 'Depression_0' else 0
-        elif col.startswith('Nutritional_Risk_'):
-            background_data[col] = 1 if col == 'Nutritional_Risk_0' else 0
+    # 连续特征设为 0（或中位数）
+    for col in continuous_cols:
+        background_data[col] = 0
     
-    # 确保列顺序正确
+    # 分类特征设为 0
+    for col in original_categorical:
+        if col in feature_cols:
+            background_data[col] = 0
+    
     background_data = pd.DataFrame([background_data], columns=feature_cols)
     
-    # 关键：对背景数据的连续特征也进行标准化
+    # 对背景数据的连续特征也进行标准化
     background_data[continuous_cols] = scaler.transform(background_data[continuous_cols])
 
     explainer = shap.KernelExplainer(
@@ -108,50 +104,43 @@ if st.button("predict"):
         shap_values = shap_values[0]
 
     # =========================
-    # 聚合 SHAP 值到原始特征
+    # 显示所有特征的 SHAP 值
     # =========================
-    original_features = continuous_cols + original_categorical
-    aggregated_shap = {}
-    aggregated_values = {}
-
-    for orig_feat in original_features:
-        if orig_feat in continuous_cols:
-            idx = feature_cols.index(orig_feat)
-            aggregated_shap[orig_feat] = shap_values[idx]
-            aggregated_values[orig_feat] = input_data_original[orig_feat]
-        else:
-            related_cols = [col for col in feature_cols if col.startswith(orig_feat + '_')]
-            related_shap = sum([shap_values[feature_cols.index(col)] for col in related_cols])
-            aggregated_shap[orig_feat] = related_shap
-            aggregated_values[orig_feat] = input_data_original[orig_feat]
-
-    # 显示原始特征的 SHAP 值
-    st.write("SHAP values of each feature (original features)：")
-    for name in original_features:
-        st.write(f"{name}: {aggregated_shap[name]:.4f}")
+    all_features = continuous_cols + original_categorical
+    
+    st.write("SHAP values of each feature：")
+    for i, name in enumerate(feature_cols):
+        if name in all_features:
+            st.write(f"{name}: {shap_values[i]:.4f} (value = {input_data_original[name]})")
 
     # =========================
-    # 生成 HTML force plot（显示所有特征）
+    # 生成 HTML force plot
     # =========================
     st.subheader("SHAP force plot of the prediction")
     
-    shap_vals_array = np.array([aggregated_shap[f] for f in original_features])
-    feature_vals_array = np.array([aggregated_values[f] for f in original_features])
+    # 准备显示用的特征名和值
+    display_features = []
+    display_values = []
+    display_shap = []
+    
+    for name in feature_cols:
+        if name in all_features:
+            display_features.append(name)
+            display_values.append(input_data_original[name])
+            display_shap.append(shap_values[feature_cols.index(name)])
     
     # 生成 force plot
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
-        shap_values=shap_vals_array,
-        features=feature_vals_array,
-        feature_names=original_features,
+        shap_values=np.array(display_shap),
+        features=np.array(display_values),
+        feature_names=display_features,
         matplotlib=False
     )
     
     shap.save_html("shap_force_plot.html", force_plot)
     
-    # 读取 HTML
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
     
-    # 显示，增加高度
     st.components.v1.html(html_content, height=300, scrolling=False)
