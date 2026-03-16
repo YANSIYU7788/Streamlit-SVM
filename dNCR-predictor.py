@@ -113,34 +113,22 @@ if st.button("predict"):
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
     # =========================
-    # 自定义条形图显示所有特征
+    # 生成 matplotlib 版本的 force plot（显示所有特征）
     # =========================
-    st.subheader("SHAP values visualization (all features)")
+    st.subheader("SHAP force plot of the prediction")
     
-    shap_vals = [aggregated_shap[f] for f in original_features]
-    feature_vals = [aggregated_values[f] for f in original_features]
+    shap_vals_array = np.array([aggregated_shap[f] for f in original_features])
+    feature_vals_array = np.array([aggregated_values[f] for f in original_features])
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # 创建颜色：正值红色，负值蓝色
-    colors = ['#ff0051' if val > 0 else '#008bfb' for val in shap_vals]
-    
-    # 绘制水平条形图
-    y_pos = np.arange(len(original_features))
-    ax.barh(y_pos, shap_vals, color=colors, alpha=0.8)
-    
-    # 设置标签
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels([f"{name} = {feature_vals[i]}" for i, name in enumerate(original_features)])
-    ax.set_xlabel('SHAP value (impact on model output)', fontsize=12)
-    ax.set_title('Feature Contributions to Prediction', fontsize=14, fontweight='bold')
-    
-    # 添加基准线
-    ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
-    
-    # 添加网格
-    ax.grid(axis='x', alpha=0.3)
-    
-    plt.tight_layout()
+    # 使用 matplotlib 版本
+    fig = plt.figure(figsize=(14, 3))
+    shap.force_plot(
+        base_value=explainer.expected_value,
+        shap_values=shap_vals_array,
+        features=feature_vals_array,
+        feature_names=original_features,
+        matplotlib=True,
+        show=False
+    )
     st.pyplot(fig)
     plt.close()
