@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 # =========================
-# 1. 加载模型、标准化器和特征列（相对路径）
+# 1. 加载模型、标准化器和特征列
 # =========================
 model_path = "svm_final_model.pkl"
 scaler_path = "svm_scaler.pkl"
@@ -16,98 +16,54 @@ model = joblib.load(model_path)
 scaler = joblib.load(scaler_path)
 feature_cols = joblib.load(feature_cols_path)
 
-# 显示实际的特征列，帮助调试
-st.sidebar.write("Model features:")
-st.sidebar.write(feature_cols)
-
 # =========================
-# 2. 自动检测 Education 是连续变量还是独热编码
-# =========================
-education_is_continuous = 'Education' in feature_cols
-education_cols = [col for col in feature_cols if col.startswith('Education_')]
-
-if education_is_continuous:
-    st.sidebar.write("Education: 连续变量")
-    continuous_cols = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR']
-    continuous_cols = [col for col in continuous_cols if col in feature_cols]
-else:
-    st.sidebar.write("Education: 独热编码")
-    continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
-    continuous_cols = [col for col in continuous_cols if col in feature_cols]
-
-# 识别分类特征
-categorical_features = []
-for prefix in ['Weakened', 'Depression', 'Nutritional_Risk']:
-    if prefix in feature_cols:
-        categorical_features.append(prefix)
-    elif any(col.startswith(prefix + '_') for col in feature_cols):
-        categorical_features.append(prefix)
-
-# =========================
-# 3. Streamlit 界面
+# 2. Streamlit 界面
 # =========================
 st.title("SVM predict dNCR")
 st.write("Please enter patient characteristics：")
 
+# 只有这4个特征需要标准化
+scale_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
+
 input_data_original = {}
 
 # 连续特征输入
-for col in ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']:
-    if col in feature_cols:
-        input_data_original[col] = st.number_input(f"{col}:", value=0.0)
+for col in scale_cols:
+    input_data_original[col] = st.number_input(f"{col}:", value=0.0)
 
-# Education 输入
-if education_is_continuous:
-    input_data_original['Education'] = st.selectbox(
-        "Education (0=文盲, 1=小学, 2=初中, 3=高中, 4=大专及以上):", 
-        options=list(range(0, 5))
-    )
-else:
-    input_data_original['Education'] = st.selectbox(
-        "Education (0=文盲, 1=小学, 2=初中, 3=高中, 4=大专及以上):", 
-        options=list(range(0, 5))
-    )
+# Education（连续但不标准化）
+input_data_original['Education'] = st.selectbox(
+    "Education (0=文盲, 1=小学, 2=初中, 3=高中, 4=大专及以上):", 
+    options=list(range(0, 5))
+)
 
-# 其他分类特征输入
+# 二分类特征
 for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
-    if feat in categorical_features:
-        input_data_original[feat] = st.selectbox(f"{feat}:", options=[0, 1])
+    input_data_original[feat] = st.selectbox(f"{feat}:", options=[0, 1])
 
 # =========================
-# 4. 预测按钮
+# 3. 预测按钮
 # =========================
 if st.button("predict"):
     # 构建输入数据
     input_data = {}
     
-    # 处理连续特征
-    for col in continuous_cols:
+    # 连续特征（未标准化）
+    for col in scale_cols:
         input_data[col] = input_data_original[col]
     
-    # 处理 Education（如果是独热编码）
-    if not education_is_continuous:
-        for col in education_cols:
-            category = int(col.split('_')[-1])
-            input_data[col] = 1 if input_data_original['Education'] == category else 0
+    # Education（连续但不标准化）
+    input_data['Education'] = input_data_original['Education']
     
-    # 处理其他分类特征
-    for feat in categorical_features:
-        if feat in feature_cols:
-            # 直接作为 0/1
-            input_data[feat] = input_data_original[feat]
-        else:
-            # 独热编码
-            related_cols = [col for col in feature_cols if col.startswith(feat + '_')]
-            for col in related_cols:
-                category = int(col.split('_')[-1])
-                input_data[col] = 1 if input_data_original[feat] == category else 0
+    # 二分类特征（drop_first=True，所以只有_1列）
+    for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
+        input_data[f'{feat}_1'] = input_data_original[feat]
     
     # 创建DataFrame
     X_input = pd.DataFrame([input_data], columns=feature_cols)
     
-    # 标准化连续特征
-    if len(continuous_cols) > 0:
-        X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
+    # 只标准化这4个特征
+    X_input[scale_cols] = scaler.transform(X_input[scale_cols])
     
     pred_prob = model.predict_proba(X_input)[:, 1]
     threshold = 0.16
@@ -119,23 +75,23 @@ if st.button("predict"):
     # =========================
     # 创建背景数据
     # =========================
-    background_data = {col: 0 for col in feature_cols}
+    background_data = {}
     
-    # 设置分类特征的参考类别
-    if not education_is_continuous and education_cols:
-        background_data['Education_0'] = 1
+    # 连续特征设为0
+    for col in scale_cols:
+        background_data[col] = 0
     
-    for feat in categorical_features:
-        if feat not in feature_cols:
-            related_cols = [col for col in feature_cols if col.startswith(feat + '_')]
-            if related_cols:
-                background_data[f'{feat}_0'] = 1
+    # Education 设为 0（文盲作为参考）
+    background_data['Education'] = 0
+    
+    # 二分类特征设为 0（参考类别）
+    for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
+        background_data[f'{feat}_1'] = 0
     
     background_data = pd.DataFrame([background_data], columns=feature_cols)
     
-    # 标准化背景数据的连续特征
-    if len(continuous_cols) > 0:
-        background_data[continuous_cols] = scaler.transform(background_data[continuous_cols])
+    # 只标准化这4个特征
+    background_data[scale_cols] = scaler.transform(background_data[scale_cols])
 
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
@@ -149,47 +105,44 @@ if st.button("predict"):
         shap_values = shap_values[0]
 
     # =========================
-    # 聚合 SHAP 值
+    # 显示 SHAP 值
     # =========================
-    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR', 
-                       'Weakened', 'Depression', 'Nutritional_Risk']
-    aggregated_shap = {}
-    aggregated_values = {}
+    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR','Weakened', 'Depression', 'Nutritional_Risk']
     
+    st.write("SHAP values of each feature：")
     for feat in display_features:
         if feat in feature_cols:
-            # 直接存在的特征
             idx = feature_cols.index(feat)
-            aggregated_shap[feat] = shap_values[idx]
-            aggregated_values[feat] = input_data_original.get(feat, 0)
-        else:
-            # 独热编码的特征，需要聚合
-            related_cols = [col for col in feature_cols if col.startswith(feat + '_')]
-            if related_cols:
-                related_shap = sum([shap_values[feature_cols.index(col)] for col in related_cols])
-                aggregated_shap[feat] = related_shap
-                aggregated_values[feat] = input_data_original.get(feat, 0)
-
-    # 显示 SHAP 值
-    st.write("SHAP values of each feature：")
-    for name in display_features:
-        if name in aggregated_shap:
-            st.write(f"{name}: {aggregated_shap[name]:.4f} (value = {aggregated_values[name]})")
+            st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")elif f'{feat}_1' in feature_cols:
+            idx = feature_cols.index(f'{feat}_1')
+            st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")
 
     # =========================
     # 生成 force plot
     # =========================
     st.subheader("SHAP force plot of the prediction")
     
-    valid_features = [f for f in display_features if f in aggregated_shap]
-    shap_vals_array = np.array([aggregated_shap[f] for f in valid_features])
-    feature_vals_array = np.array([aggregated_values[f] for f in valid_features])
+    shap_vals_list = []
+    feature_vals_list = []
+    feature_names_list = []
+    
+    for feat in display_features:
+        if feat in feature_cols:
+            idx = feature_cols.index(feat)
+            shap_vals_list.append(shap_values[idx])
+            feature_vals_list.append(input_data_original[feat])
+            feature_names_list.append(feat)
+        elif f'{feat}_1' in feature_cols:
+            idx = feature_cols.index(f'{feat}_1')
+            shap_vals_list.append(shap_values[idx])
+            feature_vals_list.append(input_data_original[feat])
+            feature_names_list.append(feat)
     
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
-        shap_values=shap_vals_array,
-        features=feature_vals_array,
-        feature_names=valid_features,
+        shap_values=np.array(shap_vals_list),
+        features=np.array(feature_vals_list),
+        feature_names=feature_names_list,
         matplotlib=False
     )
     
