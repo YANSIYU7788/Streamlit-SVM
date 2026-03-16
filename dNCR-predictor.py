@@ -58,7 +58,7 @@ if st.button("predict"):
         'GFR': 0,
         'Weakened': 0,
         'Depression': 0,
-        'Nutritional_Risk_1': 0
+        'Nutritional_Risk': 0
     }])
 
     explainer = shap.KernelExplainer(
