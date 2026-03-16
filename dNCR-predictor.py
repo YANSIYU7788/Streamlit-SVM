@@ -4,6 +4,7 @@ import joblib
 import shap
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 # =========================
 # 1. 加载模型、标准化器和特征列（相对路径）
@@ -53,10 +54,8 @@ if st.button("predict"):
     # 设置分类特征（独热编码）
     for orig_col in original_categorical:
         user_value = input_data_original[orig_col]
-        # 找到所有相关的独热编码列
         related_cols = [col for col in feature_cols if col.startswith(orig_col + '_')]
         for col in related_cols:
-            # 提取类别值
             try:
                 category = int(col.split('_')[-1])
                 input_data[col] = 1 if user_value == category else 0
@@ -99,12 +98,10 @@ if st.button("predict"):
 
     for orig_feat in original_features:
         if orig_feat in continuous_cols:
-            # 连续特征直接使用
             idx = feature_cols.index(orig_feat)
             aggregated_shap[orig_feat] = shap_values[idx]
             aggregated_values[orig_feat] = input_data_original[orig_feat]
         else:
-            # 分类特征：聚合所有相关的独热编码列
             related_cols = [col for col in feature_cols if col.startswith(orig_feat + '_')]
             related_shap = sum([shap_values[feature_cols.index(col)] for col in related_cols])
             aggregated_shap[orig_feat] = related_shap
@@ -115,17 +112,30 @@ if st.button("predict"):
     for name in original_features:
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
-    # 生成力图（使用原始特征）
-    force_plot = shap.force_plot(
-        base_value=explainer.expected_value,
-        shap_values=np.array([aggregated_shap[f] for f in original_features]),
-        features=np.array([aggregated_values[f] for f in original_features]),
-        feature_names=original_features,
-        matplotlib=False
+    # =========================
+    # 方案1: Waterfall Plot (显示所有特征)
+    # =========================
+    st.subheader("SHAP Waterfall Plot (all features)")
+    
+    # 创建 Explanation 对象
+    shap_explanation = shap.Explanation(
+        values=np.array([aggregated_shap[f] for f in original_features]),
+        base_values=explainer.expected_value,
+        data=np.array([aggregated_values[f] for f in original_features]),
+        feature_names=original_features
     )
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    shap.waterfall_plot(shap_explanation, max_display=len(original_features), show=False)
+    st.pyplot(fig)
+    plt.close()
 
-    shap.save_html("shap_force_plot.html", force_plot)
-
-    st.subheader("SHAP force plot of the prediction")
-    with open("shap_force_plot.html", "r", encoding="utf-8") as f:
-        st.components.v1.html(f.read(), height=400)
+    # =========================
+    # 方案2: Bar Plot (显示所有特征)
+    # =========================
+    st.subheader("SHAP Bar Plot (all features)")
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    shap.bar_plot(shap_explanation, max_display=len(original_features), show=False)
+    st.pyplot(fig)
+    plt.close()
