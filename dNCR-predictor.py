@@ -22,7 +22,7 @@ feature_cols = joblib.load(feature_cols_path)
 st.title("SVM predict dNCR")
 st.write("Please enter patient characteristics：")
 
-continuous_cols = ['Age', 'MOCA Score', 'Operation Time', 'GFR']
+continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
 
 # 自动识别分类特征
 categorical_cols = [col for col in feature_cols if col not in continuous_cols]
@@ -53,12 +53,12 @@ if st.button("predict"):
     background_data = pd.DataFrame([{
         'Age': 0,
         'Education': 1,
-        'MOCA Score': 0,
-        'Operation Time': 0,
+        'MOCA_Score': 0,
+        'Operation_Time': 0,
         'GFR': 0,
         'Weakened': 0,
         'Depression': 0,
-        'Nutritional Risk_1': 0
+        'Nutritional_Risk_1': 0
     }])
 
     explainer = shap.KernelExplainer(
