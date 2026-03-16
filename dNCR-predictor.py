@@ -107,13 +107,14 @@ if st.button("predict"):
     # =========================
     # 显示 SHAP 值
     # =========================
-    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR','Weakened', 'Depression', 'Nutritional_Risk']
+    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR', 'Weakened', 'Depression', 'Nutritional_Risk']
     
     st.write("SHAP values of each feature：")
     for feat in display_features:
         if feat in feature_cols:
             idx = feature_cols.index(feat)
-            st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")elif f'{feat}_1' in feature_cols:
+            st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")
+        elif f'{feat}_1' in feature_cols:
             idx = feature_cols.index(f'{feat}_1')
             st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")
 
