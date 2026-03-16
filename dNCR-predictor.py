@@ -4,7 +4,6 @@ import joblib
 import shap
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 
 # =========================
 # 1. 加载模型、标准化器和特征列（相对路径）
@@ -20,7 +19,7 @@ feature_cols = joblib.load(feature_cols_path)
 # =========================
 # 2. Streamlit 界面
 # =========================
-st.title("SVM predict dNCR")
+st.title("SVM predictdNCR")
 st.write("Please enter patient characteristics：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
@@ -107,66 +106,40 @@ if st.button("predict"):
             aggregated_shap[orig_feat] = related_shap
             aggregated_values[orig_feat] = input_data_original[orig_feat]
 
-    # 显示原始特征的 SHAP 值
+    #显示原始特征的 SHAP 值
     st.write("SHAP values of each feature (original features)：")
     for name in original_features:
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
     # =========================
-    # Waterfall 风格的可视化（显示所有特征）
+    # 生成 HTML force plot（显示所有特征）
     # =========================
-    st.subheader("SHAP values visualization")
+    st.subheader("SHAP force plot of the prediction")
     
-    base_value = explainer.expected_value
-    shap_vals = [aggregated_shap[f] for f in original_features]
-    feature_vals = [aggregated_values[f] for f in original_features]
+    shap_vals_array = np.array([aggregated_shap[f] for f in original_features])
+    feature_vals_array = np.array([aggregated_values[f] for f in original_features])
     
-    # 按绝对值排序
-    sorted_indices = np.argsort(np.abs(shap_vals))[::-1]
-    sorted_features = [original_features[i] for i in sorted_indices]
-    sorted_shap = [shap_vals[i] for i in sorted_indices]
-    sorted_values = [feature_vals[i] for i in sorted_indices]
+    # 使用 JavaScript 版本，设置 link="identity" 并调整参数
+    force_plot = shap.force_plot(
+        base_value=explainer.expected_value,
+        shap_values=shap_vals_array,
+        features=feature_vals_array,
+        feature_names=original_features,
+        matplotlib=False,
+        link="identity",
+        out_names="Prediction"
+    )
     
-    # 创建 waterfall 图
-    fig, ax = plt.subplots(figsize=(10, 8))
+    shap.save_html("shap_force_plot.html", force_plot)
     
-    # 计算累积值
-    cumsum = [base_value]
-    for val in sorted_shap:
-        cumsum.append(cumsum[-1] + val)
+    # 读取并修改 HTML 以确保显示所有特征
+    with open("shap_force_plot.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
     
-    # 绘制条形
-    y_pos = np.arange(len(sorted_features) + 2)
+    # 注入自定义样式确保显示所有特征
+    custom_html = html_content.replace(
+        '</head>',
+        '<style>.force-plot-container { min-width: 100% !important; }</style></head>'
+    )
     
-    # 基准值
-    ax.barh(0, base_value, color='gray', alpha=0.3, height=0.6)
-    ax.text(base_value/2, 0, f'Base value = {base_value:.4f}', 
-            va='center', ha='center', fontsize=10, weight='bold')
-    
-    # 每个特征的贡献
-    for i, (feat, shap_val, feat_val) in enumerate(zip(sorted_features, sorted_shap, sorted_values)):
-        color = '#ff0051' if shap_val > 0 else '#008bfb'
-        start = cumsum[i]
-        
-        ax.barh(i + 1, shap_val, left=start, color=color, alpha=0.8, height=0.6)
-        
-        # 特征标签
-        label = f'{feat} = {feat_val}\nSHAP = {shap_val:.4f}'
-        ax.text(-0.02, i + 1, label, va='center', ha='right', fontsize=9)
-    
-    # 最终预测值
-    final_value = cumsum[-1]
-    ax.barh(len(sorted_features) + 1, final_value, color='gray', alpha=0.3, height=0.6)
-    ax.text(final_value/2, len(sorted_features) + 1, f'f(x) = {final_value:.4f}', 
-            va='center', ha='center', fontsize=10, weight='bold')
-    
-    # 设置坐标轴
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(['Base'] + [''] * len(sorted_features) + ['Output'])
-    ax.set_xlabel('Model output value', fontsize=12)
-    ax.set_title('SHAP Waterfall Plot', fontsize=14, weight='bold')
-    ax.grid(axis='x', alpha=0.3)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+    st.components.v1.html(custom_html, height=150, scrolling=True)
