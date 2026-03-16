@@ -92,6 +92,9 @@ if st.button("predict"):
     
     # 确保列顺序正确
     background_data = pd.DataFrame([background_data], columns=feature_cols)
+    
+    # 关键：对背景数据的连续特征也进行标准化
+    background_data[continuous_cols] = scaler.transform(background_data[continuous_cols])
 
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
