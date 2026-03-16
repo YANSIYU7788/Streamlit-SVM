@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import joblib
 import shap
-import os
 import numpy as np
 
 # =========================
-# 1. 加载模型、标准化器和特征列
+# 1. Load model, scaler, and feature columns
 # =========================
 model_path = "svm_final_model.pkl"
 scaler_path = "svm_scaler.pkl"
@@ -17,82 +16,97 @@ scaler = joblib.load(scaler_path)
 feature_cols = joblib.load(feature_cols_path)
 
 # =========================
-# 2. Streamlit 界面
+# 2. Streamlit UI
 # =========================
-st.title("SVM predict dNCR")
-st.write("Please enter patient characteristics：")
+st.title("SVM Prediction for dNCR")
+st.write("Please enter patient characteristics:")
 
-# 只有这4个特征需要标准化
+# Continuous features that need scaling
 scale_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
 
 input_data_original = {}
 
-# 连续特征输入
+# Continuous features input
 for col in scale_cols:
     input_data_original[col] = st.number_input(f"{col}:", value=0.0)
 
-# Education（连续但不标准化）
+# Education input (not scaled)
 input_data_original['Education'] = st.selectbox(
-    "Education (0=文盲, 1=小学, 2=初中, 3=高中, 4=大专及以上):", 
-    options=list(range(0, 5))
+    "Education:",
+    options=list(range(0, 5)),
+    format_func=lambda x: {
+        0: "0 - Illiterate",
+        1: "1 - Primary School",
+        2: "2 - Middle School",
+        3: "3 - High School",
+        4: "4 - College or Above"
+    }[x]
 )
 
-# 二分类特征
+# Binary features
 for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
-    input_data_original[feat] = st.selectbox(f"{feat}:", options=[0, 1])
+    input_data_original[feat] = st.selectbox(
+        f"{feat}:",
+        options=[0, 1],
+        format_func=lambda x: "No" if x == 0 else "Yes"
+    )
 
 # =========================
-# 3. 预测按钮
+# 3. Prediction button
 # =========================
-if st.button("predict"):
-    # 构建输入数据
+if st.button("Predict"):
+    # Prepare input data
     input_data = {}
     
-    # 连续特征（未标准化）
+    # Continuous features
     for col in scale_cols:
         input_data[col] = input_data_original[col]
     
-    # Education（连续但不标准化）
+    # Education
     input_data['Education'] = input_data_original['Education']
     
-    # 二分类特征（drop_first=True，所以只有_1列）
+    # Binary features (drop_first=True in training)
     for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
         input_data[f'{feat}_1'] = input_data_original[feat]
     
-    # 创建DataFrame
+    # Create DataFrame
     X_input = pd.DataFrame([input_data], columns=feature_cols)
     
-    # 只标准化这4个特征
+    # Scale the continuous features
     X_input[scale_cols] = scaler.transform(X_input[scale_cols])
     
+    # Prediction
     pred_prob = model.predict_proba(X_input)[:, 1]
     threshold = 0.16
     pred_label = (pred_prob >= threshold).astype(int)
 
-    st.write(f"Predicted probabilities: {pred_prob[0]:.4f}")
-    st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
+    st.write(f"Predicted probability: {pred_prob[0]:.4f}")
+    st.write(f"Predicted result: {'Yes' if pred_label[0] == 1 else 'No'}")
 
     # =========================
-    # 创建背景数据
+    # Background data for SHAP
     # =========================
     background_data = {}
     
-    # 连续特征设为0
+    # Continuous features set to 0
     for col in scale_cols:
         background_data[col] = 0
     
-    # Education 设为 0（文盲作为参考）
+    # Education reference category
     background_data['Education'] = 0
     
-    # 二分类特征设为 0（参考类别）
+    # Binary features reference category
     for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
         background_data[f'{feat}_1'] = 0
     
     background_data = pd.DataFrame([background_data], columns=feature_cols)
     
-    # 只标准化这4个特征
+    # Scale continuous features
     background_data[scale_cols] = scaler.transform(background_data[scale_cols])
 
+    # =========================
+    # SHAP explainer
+    # =========================
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
         data=background_data,
@@ -105,11 +119,12 @@ if st.button("predict"):
         shap_values = shap_values[0]
 
     # =========================
-    # 显示 SHAP 值
+    # Display SHAP values
     # =========================
-    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR', 'Weakened', 'Depression', 'Nutritional_Risk']
+    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR', 
+                        'Weakened', 'Depression', 'Nutritional_Risk']
     
-    st.write("SHAP values of each feature：")
+    st.write("SHAP values for each feature:")
     for feat in display_features:
         if feat in feature_cols:
             idx = feature_cols.index(feat)
@@ -119,9 +134,9 @@ if st.button("predict"):
             st.write(f"{feat}: {shap_values[idx]:.4f} (value = {input_data_original[feat]})")
 
     # =========================
-    # 生成 force plot
+    # SHAP force plot
     # =========================
-    st.subheader("SHAP force plot of the prediction")
+    st.subheader("SHAP Force Plot")
     
     shap_vals_list = []
     feature_vals_list = []
