@@ -24,16 +24,32 @@ st.write("Please enter patient characteristics：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
 
-# 自动识别分类特征
-categorical_cols = [col for col in feature_cols if col not in continuous_cols]
+# 定义原始分类特征
+original_categorical = ['Education', 'Weakened', 'Depression', 'Nutritional_Risk']
 
+# 用户输入原始值
+input_data_original = {}
+for col in continuous_cols:
+    input_data_original[col] = st.number_input(f"{col}:", value=0)
+
+for col in original_categorical:
+    if col == 'Education':
+        input_data_original[col] = st.selectbox(f"{col}:", options=list(range(0, 5)))
+    else:
+        input_data_original[col] = st.selectbox(f"{col}:", options=[0, 1])
+
+# 构建模型输入（独热编码）
 input_data = {}
 for col in feature_cols:
     if col in continuous_cols:
-        input_data[col] = st.number_input(f"{col}:", value=0)
+        input_data[col] = input_data_original[col]
     else:
-        max_val = 4 if 'Education' in col else 1
-        input_data[col] = st.selectbox(f"{col}:", options=list(range(0, max_val + 1)))
+        # 处理独热编码列
+        for orig_col in original_categorical:
+            if col.startswith(orig_col + '_'):
+                category = int(col.split('_')[-1])
+                input_data[col] = 1 if input_data_original[orig_col] == category else 0
+                break
 
 X_input = pd.DataFrame([input_data])
 X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
@@ -46,20 +62,11 @@ if st.button("predict"):
     threshold = 0.16
     pred_label = (pred_prob >= threshold).astype(int)
 
-    st.write(f"Preducted probabilities: {pred_prob[0]:.4f}")
+    st.write(f"Predicted probabilities: {pred_prob[0]:.4f}")
     st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
-    # 创建一个合理的背景数据集（用特征的均值/中位数）
-    background_data = pd.DataFrame([{
-        'Age': 0,
-        'Education': 1,
-        'MOCA_Score': 0,
-        'Operation_Time': 0,
-        'GFR': 0,
-        'Weakened': 0,
-        'Depression': 0,
-        'Nutritional_Risk': 0
-    }])
+    # 创建背景数据
+    background_data = pd.DataFrame([{col: 0 for col in feature_cols}])
 
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
@@ -69,21 +76,40 @@ if st.button("predict"):
 
     shap_values = explainer.shap_values(X_input, nsamples=100)
 
-    # 确保是一维数组
     if len(shap_values.shape) > 1:
         shap_values = shap_values[0]
 
-    # 打印 SHAP 值查看
-    st.write("SHAP values of each feature：")
-    for name, val in zip(feature_cols, shap_values):
-        st.write(f"{name}: {val:.4f}")
+    # =========================
+    # 聚合 SHAP 值到原始特征
+    # =========================
+    original_features = continuous_cols + original_categorical
+    aggregated_shap = {}
+    aggregated_values = {}
 
-    # 生成力图
+    for orig_feat in original_features:
+        if orig_feat in continuous_cols:
+            # 连续特征直接使用
+            idx = feature_cols.index(orig_feat)
+            aggregated_shap[orig_feat] = shap_values[idx]
+            aggregated_values[orig_feat] = input_data_original[orig_feat]
+        else:
+            # 分类特征：聚合所有相关的独热编码列
+            related_cols = [col for col in feature_cols if col.startswith(orig_feat + '_')]
+            related_shap = sum([shap_values[feature_cols.index(col)] for col in related_cols])
+            aggregated_shap[orig_feat] = related_shap
+            aggregated_values[orig_feat] = input_data_original[orig_feat]
+
+    # 显示原始特征的 SHAP 值
+    st.write("SHAP values of each feature (original features)：")
+    for name in original_features:
+        st.write(f"{name}: {aggregated_shap[name]:.4f}")
+
+    # 生成力图（使用原始特征）
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
-        shap_values=shap_values,
-        features=X_input.iloc[0].values,
-        feature_names=feature_cols,
+        shap_values=np.array([aggregated_shap[f] for f in original_features]),
+        features=np.array([aggregated_values[f] for f in original_features]),
+        feature_names=original_features,
         matplotlib=False
     )
 
@@ -92,4 +118,5 @@ if st.button("predict"):
     st.subheader("SHAP force plot of the prediction")
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=400)
+
 
