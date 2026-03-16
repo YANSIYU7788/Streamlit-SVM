@@ -19,8 +19,8 @@ feature_cols = joblib.load(feature_cols_path)
 # =========================
 # 2. Streamlit 界面
 # =========================
-st.title("SVM 预测 dNCR")
-st.write("请输入患者特征：")
+st.title("SVM predict dNCR")
+st.write("Please enter patient characteristics：")
 
 continuous_cols = ['Age', 'MOCA_Score', 'Operation_Time', 'GFR']
 
@@ -41,13 +41,13 @@ X_input[continuous_cols] = scaler.transform(X_input[continuous_cols])
 # =========================
 # 3. 预测按钮
 # =========================
-if st.button("预测"):
+if st.button("predict"):
     pred_prob = model.predict_proba(X_input)[:, 1]
     threshold = 0.16
     pred_label = (pred_prob >= threshold).astype(int)
 
-    st.write(f"预测概率: {pred_prob[0]:.4f}")
-    st.write(f"预测结果: {'yes' if pred_label[0] == 1 else 'no'}")
+    st.write(f"Preducted probabilities: {pred_prob[0]:.4f}")
+    st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
     # 创建一个合理的背景数据集（用特征的均值/中位数）
     background_data = pd.DataFrame([{
