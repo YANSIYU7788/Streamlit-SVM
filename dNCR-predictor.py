@@ -154,17 +154,44 @@ if st.button("Predict"):
             feature_vals_list.append(input_data_original[feat])
             feature_names_list.append(feat)
     
+        # =========================
+    # SHAP force plot (Modified)
+    # =========================
+    st.subheader("SHAP Force Plot")
+
+    # 确保 SHAP 值和特征名称的顺序一致
+    shap_vals_list = []
+    feature_vals_list = []
+    feature_names_list = []
+
+    for feat in display_features:
+        if feat in feature_cols:
+            idx = feature_cols.index(feat)
+            shap_vals_list.append(shap_values[idx])
+            feature_vals_list.append(input_data_original[feat])
+            feature_names_list.append(feat)
+        elif f'{feat}_1' in feature_cols:
+            idx = feature_cols.index(f'{feat}_1')
+            shap_vals_list.append(shap_values[idx])
+            feature_vals_list.append(input_data_original[feat])
+            feature_names_list.append(feat)
+
+    # 使用 plot_cavas 参数增加宽度，防止左右遮挡
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=np.array(shap_vals_list),
         features=np.array(feature_vals_list),
         feature_names=feature_names_list,
-        matplotlib=False
+        matplotlib=False,
+        # 关键修改：增加画布宽度
+        plot_cavas={"width": 2000}
     )
-    
+
+    # 保存为 HTML
     shap.save_html("shap_force_plot.html", force_plot)
-    
+
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
-    
-    st.components.v1.html(html_content, height=500, width=2000,  scrolling=False)
+
+    # 在 Streamlit 中显示，保持较大的宽度
+    st.components.v1.html(html_content, height=500, width=2000, scrolling=False)
