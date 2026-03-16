@@ -74,8 +74,27 @@ if st.button("predict"):
     st.write(f"Predicted probabilities: {pred_prob[0]:.4f}")
     st.write(f"Predicted results: {'yes' if pred_label[0] == 1 else 'no'}")
 
-    # 创建背景数据
-    background_data = pd.DataFrame([{col: 0 for col in feature_cols}], columns=feature_cols)
+    # =========================
+    # 创建背景数据 - 参考类别都是 0
+    # =========================
+    background_data = {}
+    
+    # 连续特征设为 0
+    for col in continuous_cols:
+        background_data[col] = 0
+    
+    # 为每个分类特征设置参考类别为 0
+    for col in feature_cols:
+        if col.startswith('Education_'):
+            background_data[col] = 1 if col == 'Education_0' else 0
+        elif col.startswith('Weakened_'):
+            background_data[col] = 1 if col == 'Weakened_0' else 0
+        elif col.startswith('Depression_'):
+            background_data[col] = 1 if col == 'Depression_0' else 0
+        elif col.startswith('Nutritional_Risk_'):
+            background_data[col] = 1 if col == 'Nutritional_Risk_0' else 0
+    
+    background_data = pd.DataFrame([background_data], columns=feature_cols)
 
     explainer = shap.KernelExplainer(
         model=lambda x: model.predict_proba(pd.DataFrame(x, columns=feature_cols))[:, 1],
@@ -134,5 +153,5 @@ if st.button("predict"):
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
     
-    # 显示，增加高度和宽度
+    # 显示，增加高度
     st.components.v1.html(html_content, height=300, scrolling=False)
