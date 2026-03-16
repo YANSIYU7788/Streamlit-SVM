@@ -118,5 +118,3 @@ if st.button("predict"):
     st.subheader("SHAP force plot of the prediction")
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=400)
-
-
