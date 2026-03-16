@@ -57,24 +57,24 @@ for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
 if st.button("Predict"):
     # Prepare input data
     input_data = {}
-    
+
     # Continuous features
     for col in scale_cols:
         input_data[col] = input_data_original[col]
-    
+
     # Education
     input_data['Education'] = input_data_original['Education']
-    
+
     # Binary features (drop_first=True in training)
     for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
         input_data[f'{feat}_1'] = input_data_original[feat]
-    
+
     # Create DataFrame
     X_input = pd.DataFrame([input_data], columns=feature_cols)
-    
+
     # Scale the continuous features
     X_input[scale_cols] = scaler.transform(X_input[scale_cols])
-    
+
     # Prediction
     pred_prob = model.predict_proba(X_input)[:, 1]
     threshold = 0.16
@@ -87,20 +87,20 @@ if st.button("Predict"):
     # Background data for SHAP
     # =========================
     background_data = {}
-    
+
     # Continuous features set to 0
     for col in scale_cols:
         background_data[col] = 0
-    
+
     # Education reference category
     background_data['Education'] = 0
-    
+
     # Binary features reference category
     for feat in ['Weakened', 'Depression', 'Nutritional_Risk']:
         background_data[f'{feat}_1'] = 0
-    
+
     background_data = pd.DataFrame([background_data], columns=feature_cols)
-    
+
     # Scale continuous features
     background_data[scale_cols] = scaler.transform(background_data[scale_cols])
 
@@ -121,9 +121,9 @@ if st.button("Predict"):
     # =========================
     # Display SHAP values
     # =========================
-    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR', 
+    display_features = ['Age', 'Education', 'MOCA_Score', 'Operation_Time', 'GFR',
                         'Weakened', 'Depression', 'Nutritional_Risk']
-    
+
     st.write("SHAP values for each feature:")
     for feat in display_features:
         if feat in feature_cols:
@@ -137,29 +137,7 @@ if st.button("Predict"):
     # SHAP force plot
     # =========================
     st.subheader("SHAP Force Plot")
-    
-    shap_vals_list = []
-    feature_vals_list = []
-    feature_names_list = []
-    
-    for feat in display_features:
-        if feat in feature_cols:
-            idx = feature_cols.index(feat)
-            shap_vals_list.append(shap_values[idx])
-            feature_vals_list.append(input_data_original[feat])
-            feature_names_list.append(feat)
-        elif f'{feat}_1' in feature_cols:
-            idx = feature_cols.index(f'{feat}_1')
-            shap_vals_list.append(shap_values[idx])
-            feature_vals_list.append(input_data_original[feat])
-            feature_names_list.append(feat)
-    
-        # =========================
-    # SHAP force plot (Modified)
-    # =========================
-    st.subheader("SHAP Force Plot")
 
-    # 确保 SHAP 值和特征名称的顺序一致
     shap_vals_list = []
     feature_vals_list = []
     feature_names_list = []
@@ -176,27 +154,6 @@ if st.button("Predict"):
             feature_vals_list.append(input_data_original[feat])
             feature_names_list.append(feat)
 
-       # =========================
-   # SHAP force plot
-    # =========================
-    st.subheader("SHAP Force Plot")
-    
-    shap_vals_list = []
-    feature_vals_list = []
-    feature_names_list = []
-    
-    for feat in display_features:
-        if feat in feature_cols:
-            idx = feature_cols.index(feat)
-            shap_vals_list.append(shap_values[idx])
-            feature_vals_list.append(input_data_original[feat])
-            feature_names_list.append(feat)
-        elif f'{feat}_1' in feature_cols:
-            idx = feature_cols.index(f'{feat}_1')
-            shap_vals_list.append(shap_values[idx])
-            feature_vals_list.append(input_data_original[feat])
-            feature_names_list.append(feat)
-    
     force_plot = shap.force_plot(
         base_value=explainer.expected_value,
         shap_values=np.array(shap_vals_list),
@@ -204,10 +161,10 @@ if st.button("Predict"):
         feature_names=feature_names_list,
         matplotlib=False
     )
-    
+
     shap.save_html("shap_force_plot.html", force_plot)
-    
+
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         html_content = f.read()
-    
-    st.components.v1.html(html_content, height=500, width=2000,  scrolling=False)
+
+    st.components.v1.html(html_content, height=300, scrolling=False)
