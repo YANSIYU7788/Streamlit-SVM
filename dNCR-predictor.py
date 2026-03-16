@@ -5,6 +5,7 @@ import shap
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # =========================
 # 1. 加载模型、标准化器和特征列（相对路径）
@@ -113,22 +114,71 @@ if st.button("predict"):
         st.write(f"{name}: {aggregated_shap[name]:.4f}")
 
     # =========================
-    # 生成 matplotlib 版本的 force plot（显示所有特征）
+    # 自定义 Force Plot 可视化（显示所有特征）
     # =========================
     st.subheader("SHAP force plot of the prediction")
     
-    shap_vals_array = np.array([aggregated_shap[f] for f in original_features])
-    feature_vals_array = np.array([aggregated_values[f] for f in original_features])
+    base_value = explainer.expected_value
+    shap_vals = [aggregated_shap[f] for f in original_features]
+    feature_vals = [aggregated_values[f] for f in original_features]
     
-    # 使用 matplotlib 版本
-    fig = plt.figure(figsize=(14, 3))
-    shap.force_plot(
-        base_value=explainer.expected_value,
-        shap_values=shap_vals_array,
-        features=feature_vals_array,
-        feature_names=original_features,
-        matplotlib=True,
-        show=False
-    )
+    # 按 SHAP 值排序
+    sorted_indices = np.argsort(shap_vals)
+    sorted_features = [original_features[i] for i in sorted_indices]
+    sorted_shap = [shap_vals[i] for i in sorted_indices]
+    sorted_values = [feature_vals[i] for i in sorted_indices]
+    
+    # 创建图形
+    fig, ax = plt.subplots(figsize=(14, 4))
+    
+    # 计算累积位置
+    cumsum = np.cumsum([0] + sorted_shap)
+    
+    # 绘制每个特征的贡献
+    for i, (feat, shap_val, feat_val) in enumerate(zip(sorted_features, sorted_shap, sorted_values)):
+        color = '#ff0051' if shap_val > 0 else '#008bfb'
+        
+        # 绘制矩形
+        rect = mpatches.FancyBboxPatch(
+            (cumsum[i] + base_value, 0.3),
+            shap_val,
+            0.4,
+            boxstyle="round,pad=0.01",
+            linewidth=1,
+            edgecolor='white',
+            facecolor=color,
+            alpha=0.8
+        )
+        ax.add_patch(rect)
+        
+        # 添加特征标签
+        text_x = cumsum[i] + base_value + shap_val / 2
+        ax.text(text_x, 0.5, f'{feat}={feat_val}', 
+                ha='center', va='center', fontsize=8, 
+                color='white', weight='bold', rotation=0)
+    
+    # 设置坐标轴
+    final_value = base_value + sum(sorted_shap)
+    ax.set_xlim(min(base_value, final_value) - 0.05, max(base_value, final_value) + 0.05)
+    ax.set_ylim(0, 1)
+    
+    # 添加基准值和输出值标签
+    ax.text(base_value, 0.1, f'base value\n{base_value:.3f}', 
+            ha='center', va='top', fontsize=10, weight='bold')
+    ax.text(final_value, 0.1, f'f(x)\n{final_value:.3f}', 
+            ha='center', va='top', fontsize=10, weight='bold')
+    
+    # 添加箭头
+    ax.annotate('', xy=(final_value, 0.5), xytext=(base_value, 0.5),
+                arrowprops=dict(arrowstyle='->', lw=2, color='black'))
+    
+    # 隐藏坐标轴
+    ax.set_yticks([])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel('Model output value', fontsize=11)
+    
+    plt.tight_layout()
     st.pyplot(fig)
     plt.close()
