@@ -74,7 +74,7 @@ if st.button("predict"):
         shap_values = shap_values[0]
 
     # 打印 SHAP 值查看
-    st.write("各特征的 SHAP 值：")
+    st.write("SHAP values of each feature：")
     for name, val in zip(feature_cols, shap_values):
         st.write(f"{name}: {val:.4f}")
 
@@ -89,7 +89,7 @@ if st.button("predict"):
 
     shap.save_html("shap_force_plot.html", force_plot)
 
-    st.subheader("模型预测的 SHAP 力图")
+    st.subheader("SHAP force plot of the prediction")
     with open("shap_force_plot.html", "r", encoding="utf-8") as f:
         st.components.v1.html(f.read(), height=400)
 
