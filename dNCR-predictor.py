@@ -184,7 +184,7 @@ if st.button("Predict"):
         feature_names=feature_names_list,
         matplotlib=False,
         # 关键修改：增加画布宽度
-        plot_cavas={"width": 2000}
+        plot_canvas={"width": 2000}
     )
 
     # 保存为 HTML
